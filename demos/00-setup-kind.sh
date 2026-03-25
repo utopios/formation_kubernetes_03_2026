@@ -42,7 +42,7 @@ kubectl label node "${CLUSTER_NAME}-worker2" env=staging    --overwrite
 kubectl label node "${CLUSTER_NAME}-worker3" env=production --overwrite
 
 echo "[INFO] Création des namespaces..."
-kubectl apply -f 01-namespaces.yaml
+kubectl apply -f $(dirname $0)/01-namespaces.yaml
 
 echo "[INFO] Installation Metrics Server..."
 kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
