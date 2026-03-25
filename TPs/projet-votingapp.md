@@ -241,12 +241,12 @@ Créer `06-vote/vote-ui.yaml` contenant :
 **Deployment** `vote-ui` avec :
 - 2 replicas
 - Image `mohamed1780/vote-ui`
-- Variable d'environnement `VOTE_API_URL` : `http://vote:8080` (URL interne du backend)
-- **readinessProbe** HTTP sur `/` port 8080, initialDelaySeconds: 5
-- **livenessProbe** HTTP sur `/` port 8080, initialDelaySeconds: 15
+- Variable d'environnement `VOTE_API_URL` : `http://vote:5000` (URL interne du backend)
+- **readinessProbe** HTTP sur `/` port 80, initialDelaySeconds: 5
+- **livenessProbe** HTTP sur `/` port 80, initialDelaySeconds: 15
 - Resources : request 100m/128Mi, limit 500m/256Mi
 
-**Service** `vote-ui` de type `NodePort` exposant le port 8080 sur le nodePort `31000`.
+**Service** `vote-ui` de type `NodePort` exposant le port 80 sur le nodePort `31000`.
 
 **Validation :**
 ```bash
@@ -271,10 +271,10 @@ Créer `07-result/result.yaml` contenant :
 - 2 replicas
 - Image `mohamed1780/result`
 - Variables d'environnement depuis le ConfigMap et le Secret : `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
-- **readinessProbe** HTTP sur `/` port 8080
+- **readinessProbe** TCPSOCKET port 5000
 - Resources : request 100m/128Mi, limit 500m/256Mi
 
-**Service** `result` de type `ClusterIP` exposant le port 8080 (interne uniquement — accessible par result-ui).
+**Service** `result` de type `ClusterIP` exposant le port 5000 (interne uniquement — accessible par result-ui).
 
 ---
 
@@ -287,11 +287,11 @@ Créer `07-result/result-ui.yaml` contenant :
 **Deployment** `result-ui` avec :
 - 2 replicas
 - Image `mohamed1780/result-ui`
-- Variable d'environnement `RESULT_API_URL` : `http://result:8080` (URL interne du backend)
-- **readinessProbe** HTTP sur `/` port 8080
+- Variable d'environnement `RESULT_API_URL` : `http://result:5000` (URL interne du backend)
+- **readinessProbe** HTTP sur `/` port 80
 - Resources : request 100m/128Mi, limit 500m/256Mi
 
-**Service** `result-ui` de type `NodePort` exposant le port 8080 sur le nodePort `31001`.
+**Service** `result-ui` de type `NodePort` exposant le port 80 sur le nodePort `31001`.
 
 **Validation complète de l'application :**
 ```bash
