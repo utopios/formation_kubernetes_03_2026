@@ -1,0 +1,32 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: calcul-pi
+  namespace: dev
+spec:
+  completions: 5
+  parallelism: 2
+  backoffLimit: 3
+  activeDeadlineSeconds: 120
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: pi
+          image: perl:5.34
+          command:
+            - perl
+            - -Mbignum=bpi
+            - -wle
+            - "print bpi(100)"
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "200m"
+              memory: "64Mi"
+# Suivre l'exécution :
+#   kubectl get job calcul-pi -n dev -w
+#   kubectl get pods -n dev -l job-name=calcul-pi
+#   kubectl logs -n dev -l job-name=calcul-pi

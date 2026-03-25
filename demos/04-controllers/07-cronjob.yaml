@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: rapport-toutes-minutes
+  namespace: dev
+spec:
+  schedule: "*/1 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 50
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: reporter
+              image: busybox:1.36
+              command:
+                - sh
+                - -c
+                - |
+                  echo "=== Rapport $(date) ==="
+                  echo "Nœud : $(cat /etc/hostname)"
+                  echo "Uptime : $(cat /proc/uptime)"
+                  echo "Fin du rapport"
+              resources:
+                requests:
+                  cpu: "5m"
+                  memory: "8Mi"
+                limits:
+                  cpu: "50m"
+                  memory: "16Mi"
+# Vérifier :
+#   kubectl get cronjob rapport-toutes-minutes -n dev -w
+#   kubectl get jobs -n dev -w
+#   kubectl logs -n dev -l job-name=$(kubectl get jobs -n dev --sort-by=.metadata.creationTimestamp -o name | tail -1 | cut -d/ -f2)

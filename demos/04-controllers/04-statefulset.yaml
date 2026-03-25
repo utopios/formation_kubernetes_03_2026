@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-headless
+  namespace: dev
+spec:
+  clusterIP: None
+  selector:
+    app: nginx-sts
+  ports:
+    - port: 80
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nginx-sts
+  namespace: dev
+spec:
+  serviceName: nginx-headless
+  replicas: 3
+  podManagementPolicy: OrderedReady
+  selector:
+    matchLabels:
+      app: nginx-sts
+  template:
+    metadata:
+      labels:
+        app: nginx-sts
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.25-alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/nginx/html
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "16Mi"
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 100Mi
+# Vérifier les identités stables :
+#   kubectl get pods -n dev -l app=nginx-sts         # nginx-sts-0, nginx-sts-1, nginx-sts-2
+#   kubectl get pvc -n dev                            # un PVC par pod
+#   kubectl exec nginx-sts-0 -n dev -- hostname       # nginx-sts-0
+#   nslookup nginx-sts-0.nginx-headless.dev.svc.cluster.local (depuis dns-debug)
