@@ -222,13 +222,13 @@ Créer `06-vote/vote.yaml` contenant :
 - 3 replicas
 - Image `mohamed1780/vote`
 - Variables d'environnement depuis le ConfigMap : `OPTION_A`, `OPTION_B`, `REDIS_HOST`, `REDIS_PORT`
-- Variable **Downward API** `POD_NAME` (spec.nodeName) pour identifier quel pod répond
-- **readinessProbe** HTTP sur `/` port 8080, initialDelaySeconds: 5
-- **livenessProbe** HTTP sur `/` port 8080, initialDelaySeconds: 15
+- Variable **Downward API** `POD_NAME` (spec.metadata.name) pour identifier quel pod répond
+- **readinessProbe** tcpSocket 5000, initialDelaySeconds: 5
+- **livenessProbe** tcpSocket 5000, initialDelaySeconds: 15
 - Stratégie `RollingUpdate` avec `maxSurge: 1` et `maxUnavailable: 0`
 - Resources : request 100m/128Mi, limit 500m/256Mi
 
-**Service** `vote` de type `ClusterIP` exposant le port 8080 (interne uniquement — accessible par vote-ui).
+**Service** `vote` de type `ClusterIP` exposant le port 5000 (interne uniquement — accessible par vote-ui).
 
 ---
 
