@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: demo-probe
+  namespace: dev
+  labels: {app: demo-probe}
+spec:
+  containers:
+    - name: app
+      image: nginx:1.25
+      ports: [{containerPort: 80}]
+      resources:
+        requests: {cpu: "50m", memory: "64Mi"}
+        limits: {cpu: "200m", memory: "128Mi"}
+      startupProbe:
+        httpGet: {path: /, port: 80}
+        failureThreshold: 10
+        periodSeconds: 5
+      livenessProbe:
+        httpGet: {path: /, port: 80}
+        periodSeconds: 10
+        failureThreshold: 3
+      readinessProbe:
+        httpGet: {path: /, port: 80}
+        periodSeconds: 5
+        failureThreshold: 2
