@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: voting-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "vote-app.labels" . | nindent 4 }}
+data:
+  OPTION_A: {{ .Values.config.optionA | quote }}
+  OPTION_B: {{ .Values.config.optionB | quote }}
+  REDIS_HOST: {{ .Values.config.redisHost | quote }}
+  REDIS_PORT: {{ .Values.config.redisPort | quote }}
+  POSTGRES_HOST: {{ .Values.config.postgresHost | quote }}
+  POSTGRES_PORT: {{ .Values.config.postgresPort | quote }}
+  POSTGRES_DB: {{ .Values.config.postgresDb | quote }}

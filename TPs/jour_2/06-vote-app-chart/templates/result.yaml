@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: result
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: result
+    {{- include "vote-app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.result.replicaCount }}
+  selector:
+    matchLabels:
+      app: result
+  template:
+    metadata:
+      labels:
+        app: result
+    spec:
+      containers:
+        - name: result
+          image: {{ .Values.result.image }}
+          ports:
+            - containerPort: {{ .Values.result.port }}
+          envFrom:
+            - configMapRef:
+                name: voting-config
+            - secretRef:
+                name: voting-secrets
+          resources:
+            {{- toYaml .Values.result.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: result
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: result
+    {{- include "vote-app.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: result
+  ports:
+    - port: {{ .Values.result.port }}
+      targetPort: {{ .Values.result.port }}

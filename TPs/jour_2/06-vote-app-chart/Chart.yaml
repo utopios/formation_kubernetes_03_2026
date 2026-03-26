@@ -1,0 +1,16 @@
+apiVersion: v2
+name: vote-app
+description: Distributed Voting Application 
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+maintainers:
+  - name: formation-k8s
+    email: ihab@utopios.net
+
+keywords:
+  - voting
+  - redis
+  - postgresql
+  - python

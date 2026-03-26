@@ -1,0 +1,4 @@
+resultUi:
+  nodePort: 31001
+voteUi:
+  nodePort: 31002

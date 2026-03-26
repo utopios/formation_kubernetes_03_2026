@@ -1,0 +1,15 @@
+Vote App déployée avec succès !
+
+Namespace : {{ .Values.namespace }}
+
+Accès à l'application :
+  - Vote UI   : http://<NODE_IP>:{{ .Values.voteUi.nodePort }}
+  - Result UI : http://<NODE_IP>:{{ .Values.resultUi.nodePort }}
+
+Options de vote : {{ .Values.config.optionA }} vs {{ .Values.config.optionB }}
+
+Pour obtenir l'IP du nœud :
+  kubectl get nodes -o wide
+
+Pour vérifier les pods :
+  kubectl get pods -n {{ .Values.namespace }}

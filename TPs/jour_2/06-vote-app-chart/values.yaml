@@ -1,0 +1,100 @@
+namespace: voting
+
+config:
+  optionA: "Cats"
+  optionB: "Dogs"
+  redisHost: redis
+  redisPort: "6379"
+  postgresHost: db
+  postgresPort: "5432"
+  postgresDb: votes
+
+secret:
+  postgresUser: postgres
+  postgresPassword: v0t1ng-p4ss
+
+redis:
+  image: redis:7.2-alpine
+  port: 6379
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+postgresql:
+  image: postgres:15-alpine
+  port: 5432
+  storage: 1Gi
+  resources:
+    requests:
+      cpu: 200m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+worker:
+  image: mohamed1780/worker
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+vote:
+  image: mohamed1780/vote
+  replicaCount: 3
+  port: 5000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+voteUi:
+  image: mohamed1780/vote-ui
+  replicaCount: 2
+  port: 80
+  nodePort: 30080
+  voteApiUrl: "http://vote:5000"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+result:
+  image: mohamed1780/result
+  replicaCount: 2
+  port: 5000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+resultUi:
+  image: mohamed1780/result-ui
+  replicaCount: 2
+  port: 80
+  nodePort: 30090
+  resultApiUrl: "http://result:5000"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi

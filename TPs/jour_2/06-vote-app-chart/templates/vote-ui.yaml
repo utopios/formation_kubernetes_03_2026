@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vote-ui
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: vote-ui
+    {{- include "vote-app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.voteUi.replicaCount }}
+  selector:
+    matchLabels:
+      app: vote-ui
+  template:
+    metadata:
+      labels:
+        app: vote-ui
+    spec:
+      containers:
+        - name: vote-ui
+          image: {{ .Values.voteUi.image }}
+          ports:
+            - containerPort: {{ .Values.voteUi.port }}
+          env:
+            - name: VOTE_API_URL
+              value: {{ .Values.voteUi.voteApiUrl | quote }}
+            - name: OPTION_A
+              valueFrom:
+                configMapKeyRef:
+                  name: voting-config
+                  key: OPTION_A
+            - name: OPTION_B
+              valueFrom:
+                configMapKeyRef:
+                  name: voting-config
+                  key: OPTION_B
+          resources:
+            {{- toYaml .Values.voteUi.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vote-ui
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: vote-ui
+    {{- include "vote-app.labels" . | nindent 4 }}
+spec:
+  type: NodePort
+  selector:
+    app: vote-ui
+  ports:
+    - port: {{ .Values.voteUi.port }}
+      targetPort: {{ .Values.voteUi.port }}
+      nodePort: {{ .Values.voteUi.nodePort }}
