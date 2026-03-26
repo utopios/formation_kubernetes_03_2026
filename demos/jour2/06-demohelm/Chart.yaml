@@ -1,0 +1,12 @@
+apiVersion: v2
+name: flask-api
+description: API Python Flask
+type: application
+version: 1.0.0 
+appVersion: "2.3.1"
+
+dependencies:
+  - name: postgresql
+    version: "16.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
