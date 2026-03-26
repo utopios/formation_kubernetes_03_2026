@@ -1,0 +1,50 @@
+# =============================================================================
+# 02-load-generator.yaml — Générateur de charge pour déclencher le HPA
+#
+# Ce Job envoie des requêtes continues pendant 5 minutes pour forcer le scale-up.
+# Il suffit de l'appliquer, d'observer le HPA, puis de le supprimer pour
+# laisser le HPA scale down.
+#
+# Workflow de la démo :
+#   1. kubectl get hpa -n hpa-demo -w              → 2 replicas, CPU ~0%
+#   2. kubectl apply -f 02-load-generator.yaml
+#   3. kubectl get hpa -n hpa-demo -w              → CPU monte, scale up déclenché
+#   4. kubectl get pods -n hpa-demo -w             → nouveaux pods créés
+#   5. kubectl delete -f 02-load-generator.yaml    → charge s'arrête
+#   6. kubectl get hpa -n hpa-demo -w              → CPU redescend, scale down (5 min)
+# =============================================================================
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: load-generator
+  namespace: hpa-demo
+spec:
+  # Pas de completions : tourne jusqu'à ce qu'on le supprime
+  parallelism: 3    # 3 workers simultanés pour générer assez de charge
+  template:
+    metadata:
+      labels:
+        app: load-generator
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: load
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              echo "Début du load test..."
+              # Envoyer des requêtes en boucle pendant 5 minutes
+              END=$(($(date +%s) + 300))
+              while [ $(date +%s) -lt $END ]; do
+                wget -qO- http://hpa-demo.hpa-demo.svc.cluster.local > /dev/null 2>&1 || true
+              done
+              echo "Load test terminé"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi

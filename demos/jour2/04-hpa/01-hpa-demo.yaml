@@ -1,0 +1,129 @@
+# =============================================================================
+# 01-hpa-demo.yaml — Horizontal Pod Autoscaler
+#
+# PRÉREQUIS : Metrics Server installé dans le cluster
+#   (installé par 00-setup-kind.sh via kubectl apply -f metrics-server.yaml)
+#
+# Ce manifest déploie :
+#   1. Un Deployment nginx simulant une API avec des ressources limitées
+#   2. Un HPA qui scale entre 2 et 10 replicas selon la CPU
+#
+# Pour générer de la charge et déclencher le scale-up :
+#   kubectl run load-generator \
+#     --image=busybox:1.36 --restart=Never -- \
+#     sh -c "while true; do wget -qO- http://hpa-demo.hpa-demo.svc.cluster.local; done"
+#
+# Observer le scaling :
+#   kubectl get hpa -n hpa-demo -w
+#   kubectl get pods -n hpa-demo -w
+# =============================================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hpa-demo
+  labels:
+    demo: hpa
+---
+# Application cible du HPA
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hpa-demo
+  namespace: hpa-demo
+spec:
+  replicas: 2   # Nombre initial — le HPA va en prendre le contrôle
+  selector:
+    matchLabels:
+      app: hpa-demo
+  template:
+    metadata:
+      labels:
+        app: hpa-demo
+    spec:
+      containers:
+        - name: webapp
+          image: nginx:1.25-alpine
+          ports:
+            - containerPort: 80
+          # IMPORTANT : requests CPU doit être défini pour que le HPA calcule l'utilisation
+          # HPA utilise : (CPU utilisé) / (CPU requesté) × 100 = %
+          resources:
+            requests:
+              cpu: 100m      # Le HPA calcule le % par rapport à cette valeur
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hpa-demo
+  namespace: hpa-demo
+spec:
+  selector:
+    app: hpa-demo
+  ports:
+    - port: 80
+      targetPort: 80
+---
+# =============================================================================
+# HPA — Horizontal Pod Autoscaler
+# =============================================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hpa-demo
+  namespace: hpa-demo
+spec:
+  # Cible du scaling
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: hpa-demo
+
+  # Limites de scaling
+  minReplicas: 2    # Ne jamais descendre sous 2 pods (disponibilité minimale)
+  maxReplicas: 10   # Ne jamais dépasser 10 pods (protection contre les coûts)
+
+  metrics:
+    # Métrique CPU (la plus courante)
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          # Si la CPU moyenne dépasse 50% → scale up
+          # Si la CPU moyenne descend sous 50% → scale down
+          averageUtilization: 50
+    # Optionnel : métrique mémoire en parallèle
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+  # Comportement du scaling (Kubernetes 1.18+)
+  behavior:
+    scaleUp:
+      # Attendre 60s de stabilité avant de scale up (évite les oscillations)
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 100        # Peut doubler le nombre de pods par période
+          periodSeconds: 60
+    scaleDown:
+      # Attendre 5 min avant de scale down (les pics de trafic sont souvent courts)
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1          # Supprime max 1 pod par minute (décroissance prudente)
+          periodSeconds: 60

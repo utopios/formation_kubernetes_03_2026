@@ -6,7 +6,7 @@
 # =============================================================================
 set -euo pipefail
 
-export KUBECONFIG=/tmp/kind-kubeconfig
+# export KUBECONFIG=/tmp/kind-kubeconfig
 
 echo "======================================================"
 echo " Démo Security Context — Comparaison insecure vs secure"
