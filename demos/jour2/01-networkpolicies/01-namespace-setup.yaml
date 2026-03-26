@@ -1,0 +1,46 @@
+# =============================================================================
+# 01-namespace-setup.yaml — Namespaces pour la démo NetworkPolicy
+#
+# On crée 3 namespaces simulant une architecture 3-tiers :
+#   - netpol-frontend : tier web (accès public)
+#   - netpol-backend  : tier API (accès restreint)
+#   - netpol-db       : tier base de données (accès ultra-restreint)
+#
+# IMPORTANT : Kind utilise Flannel par défaut qui NE supporte PAS
+# les NetworkPolicies. Il faut avoir installé Calico ou Cilium.
+# Ce cluster Kind a été créé avec Calico via 00-setup-kind.sh.
+# =============================================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: netpol-frontend
+  labels:
+    # Ce label sera utilisé dans les namespaceSelector des NetworkPolicies
+    tier: frontend
+    demo: networkpolicies
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: netpol-backend
+  labels:
+    tier: backend
+    demo: networkpolicies
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: netpol-db
+  labels:
+    tier: database
+    demo: networkpolicies
+---
+# Namespace de monitoring — autorisé à scraper les métriques de partout
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: netpol-monitoring
+  labels:
+    tier: monitoring
+    demo: networkpolicies

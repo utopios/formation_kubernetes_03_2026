@@ -1,0 +1,196 @@
+# =============================================================================
+# 02-apps.yaml — Applications de la démo NetworkPolicy
+#
+# Architecture simulée :
+#   frontend (nginx) → backend (nginx) → database (postgres)
+#
+# On utilise des images simples pour ne pas dépendre d'une vraie app.
+# Les communications sont testées avec curl / nc depuis des pods de debug.
+# =============================================================================
+
+# --- FRONTEND ---
+# Simule un serveur web exposé au public
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: netpol-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+      tier: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+        tier: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: nginx:1.25-alpine
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: netpol-frontend
+spec:
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      targetPort: 80
+---
+# --- BACKEND ---
+# Simule une API REST — ne doit être accessible que depuis le frontend
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: netpol-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+      tier: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+        tier: backend
+    spec:
+      containers:
+        - name: backend
+          image: nginx:1.25-alpine
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: netpol-backend
+spec:
+  selector:
+    app: backend
+  ports:
+    - port: 80
+      targetPort: 80
+---
+# --- DATABASE ---
+# Simule PostgreSQL — ne doit être accessible que depuis le backend
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: database
+  namespace: netpol-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: database
+      tier: database
+  template:
+    metadata:
+      labels:
+        app: database
+        tier: database
+    spec:
+      containers:
+        - name: database
+          # On simule avec un simple TCP listener sur le port 5432
+          # (pas besoin d'un vrai Postgres pour tester les NetworkPolicies)
+          image: alpine:3.19
+          command: ["sh", "-c", "while true; do echo 'DB ready' | nc -l -p 5432; done"]
+          ports:
+            - containerPort: 5432
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: database
+  namespace: netpol-db
+spec:
+  selector:
+    app: database
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+# --- MONITORING ---
+# Simule Prometheus — doit pouvoir scraper les métriques de partout
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: netpol-monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: alpine:3.19
+          command: ["sleep", "3600"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+---
+# --- POD DE DEBUG ---
+# Un pod attacker/intrus pour tester que les politiques bloquent bien
+apiVersion: v1
+kind: Pod
+metadata:
+  name: attacker
+  namespace: default
+  labels:
+    app: attacker
+spec:
+  containers:
+    - name: attacker
+      image: alpine:3.19
+      # nc (netcat) et wget sont disponibles dans alpine
+      command: ["sleep", "3600"]
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi

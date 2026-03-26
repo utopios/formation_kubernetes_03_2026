@@ -1,0 +1,196 @@
+# =============================================================================
+# 04-allow-frontend-to-backend.yaml — Ouvrir sélectivement le trafic
+#
+# Objectif : après le deny-all, autoriser UNIQUEMENT :
+#   1. Le frontend → backend (port 80)
+#   2. Le backend → database (port 5432)
+#   3. DNS (port 53 UDP/TCP) pour que les pods puissent résoudre les noms
+#   4. Le monitoring → tous (port 80 et 5432)
+#
+# À appliquer APRÈS 03-deny-all.yaml
+# =============================================================================
+
+# =============================================================================
+# PARTIE 1 : Namespace netpol-frontend
+# =============================================================================
+
+# Autoriser le trafic entrant vers le frontend (depuis n'importe où — c'est public)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-frontend
+  namespace: netpol-frontend
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes:
+    - Ingress
+  ingress:
+    # Autoriser depuis n'importe quelle source (trafic public)
+    - ports:
+        - port: 80
+          protocol: TCP
+---
+# Autoriser le frontend à appeler le backend et faire du DNS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-frontend
+  namespace: netpol-frontend
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes:
+    - Egress
+  egress:
+    # DNS — indispensable pour résoudre "backend.netpol-backend.svc.cluster.local"
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Appels vers le backend (namespace netpol-backend, pods avec label app=backend)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              tier: backend
+          podSelector:
+            matchLabels:
+              app: backend
+      ports:
+        - port: 80
+          protocol: TCP
+
+---
+# =============================================================================
+# PARTIE 2 : Namespace netpol-backend
+# =============================================================================
+
+# Autoriser le backend à recevoir uniquement depuis le frontend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-backend-from-frontend
+  namespace: netpol-backend
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        # namespaceSelector ET podSelector sont combinés (AND logique dans le même item)
+        - namespaceSelector:
+            matchLabels:
+              tier: frontend
+          podSelector:
+            matchLabels:
+              app: frontend
+      ports:
+        - port: 80
+          protocol: TCP
+---
+# Autoriser le backend à appeler la database et faire du DNS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-backend
+  namespace: netpol-backend
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+    - Egress
+  egress:
+    # DNS
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Base de données
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              tier: database
+          podSelector:
+            matchLabels:
+              app: database
+      ports:
+        - port: 5432
+          protocol: TCP
+
+---
+# =============================================================================
+# PARTIE 3 : Namespace netpol-db
+# =============================================================================
+
+# Autoriser la DB à recevoir uniquement depuis le backend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-db-from-backend
+  namespace: netpol-db
+spec:
+  podSelector:
+    matchLabels:
+      app: database
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              tier: backend
+          podSelector:
+            matchLabels:
+              app: backend
+      ports:
+        - port: 5432
+          protocol: TCP
+---
+# La DB n'a besoin d'émettre que du DNS (pas d'appels externes)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-db-dns
+  namespace: netpol-db
+spec:
+  podSelector:
+    matchLabels:
+      app: database
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+
+---
+# =============================================================================
+# PARTIE 4 : Monitoring — peut scraper tout le monde
+# =============================================================================
+
+# Prometheus peut contacter n'importe quel pod sur n'importe quel port
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-ingress
+  namespace: netpol-backend
+spec:
+  podSelector: {}   # Tous les pods backend acceptent le trafic du monitoring
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              tier: monitoring
+      ports:
+        - port: 80

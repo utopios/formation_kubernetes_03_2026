@@ -1,0 +1,54 @@
+# =============================================================================
+# 03-deny-all.yaml — Baseline de sécurité : tout bloquer par défaut
+#
+# PRINCIPE FONDAMENTAL des NetworkPolicies :
+# - Par défaut (sans aucune policy), tout le trafic est autorisé
+# - Dès qu'UNE policy sélectionne un pod, SEUL le trafic explicitement
+#   autorisé dans LES policies qui sélectionnent ce pod est permis
+# - Les policies sont ADDITIVES : on accumule les autorisations
+#
+# BONNE PRATIQUE : commencer par un "deny-all" puis ouvrir sélectivement
+#
+# Appliquer : kubectl apply -f 03-deny-all.yaml
+# Tester AVANT : kubectl exec attacker -- wget -qO- http://backend.netpol-backend  # OK
+# Tester APRÈS  : kubectl exec attacker -- wget -qO- http://backend.netpol-backend  # TIMEOUT
+# =============================================================================
+
+# --- Deny all dans netpol-backend ---
+# Bloque TOUT le trafic entrant ET sortant des pods backend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all
+  namespace: netpol-backend
+spec:
+  # podSelector vide = sélectionne TOUS les pods du namespace
+  podSelector: {}
+  policyTypes:
+    - Ingress   # Bloquer tout le trafic entrant
+    - Egress    # Bloquer tout le trafic sortant
+  # Pas de règles ingress/egress = tout est bloqué
+---
+# --- Deny all dans netpol-db ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all
+  namespace: netpol-db
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# --- Deny all dans netpol-frontend ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all
+  namespace: netpol-frontend
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress

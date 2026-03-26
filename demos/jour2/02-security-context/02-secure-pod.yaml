@@ -1,0 +1,79 @@
+# =============================================================================
+# 02-secure-pod.yaml — Pod avec Security Context complet (bonne pratique)
+#
+# Ce pod applique toutes les recommandations de sécurité runtime :
+# - Utilisateur non-root (uid 1000)
+# - Filesystem root en lecture seule
+# - Zéro capability Linux
+# - Pas d'escalade de privilèges
+# - Profil seccomp RuntimeDefault
+# - Volume tmpfs pour les écritures temporaires
+#
+# Démonstration :
+#   kubectl exec secure-pod -- id              → uid=1000
+#   kubectl exec secure-pod -- touch /test     → Read-only filesystem
+#   kubectl exec secure-pod -- touch /tmp/test → OK (tmpfs)
+#   kubectl exec secure-pod -- cat /proc/1/status | grep Cap → capabilities vides
+# =============================================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: secure-pod
+  namespace: default
+  labels:
+    demo: security-context
+    security: secure
+spec:
+  # --- Security Context au niveau POD ---
+  securityContext:
+    # Interdit au container de tourner en root (UID 0)
+    runAsNonRoot: true
+    # Forcer l'UID et GID
+    runAsUser: 1000
+    runAsGroup: 1000
+    # Les fichiers créés dans les volumes montés appartiennent à ce GID
+    fsGroup: 1000
+    # Profil seccomp — filtre les appels système autorisés
+    # RuntimeDefault = profil Docker/containerd par défaut (sécurisé)
+    seccompProfile:
+      type: RuntimeDefault
+
+  containers:
+    - name: app
+      image: alpine:3.19
+      command: ["sleep", "3600"]
+
+      # --- Security Context au niveau CONTAINER ---
+      securityContext:
+        # Filesystem root en lecture seule — oblige à utiliser des volumes pour écrire
+        readOnlyRootFilesystem: true
+        # Empêche le processus d'obtenir plus de droits que son parent
+        # (ex: setuid binaries, sudo)
+        allowPrivilegeEscalation: false
+        # Supprimer TOUTES les Linux capabilities
+        # (par défaut un container a : CHOWN, DAC_OVERRIDE, FOWNER, KILL, NET_BIND_SERVICE, etc.)
+        capabilities:
+          drop:
+            - ALL
+        # Jamais en production — exclure explicitement
+        privileged: false
+
+      volumeMounts:
+        # /tmp est le seul endroit où le container peut écrire
+        - name: tmp-volume
+          mountPath: /tmp
+
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
+
+  volumes:
+    # tmpfs : stockage en mémoire, non persisté, non accessible depuis le nœud
+    - name: tmp-volume
+      emptyDir:
+        medium: Memory   # Monte en RAM (plus rapide, jamais sur disque)
+        sizeLimit: 64Mi

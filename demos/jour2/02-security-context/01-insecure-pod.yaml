@@ -1,0 +1,40 @@
+# =============================================================================
+# 01-insecure-pod.yaml — Pod volontairement non sécurisé (baseline de comparaison)
+#
+# Ce pod illustre les mauvaises pratiques à ÉVITER en production :
+# - Tourne en root (uid 0)
+# - Peut escalader ses privilèges
+# - Filesystem writeable partout
+# - Toutes les Linux capabilities actives
+# - Image :latest non versionnée
+#
+# Démonstration :
+#   kubectl apply -f 01-insecure-pod.yaml
+#   kubectl exec insecure-pod -- id              → root
+#   kubectl exec insecure-pod -- whoami          → root
+#   kubectl exec insecure-pod -- cat /etc/passwd → lisible
+#   kubectl exec insecure-pod -- touch /test     → peut écrire partout
+# =============================================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: insecure-pod
+  namespace: default
+  labels:
+    demo: security-context
+    security: insecure
+spec:
+  # Aucun securityContext au niveau pod
+  containers:
+    - name: app
+      image: alpine:3.19   # au moins une version fixée pour la démo
+      command: ["sleep", "3600"]
+      # Pas de securityContext au niveau container
+      # → tourne en root par défaut, peut écrire partout, toutes capabilities
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi

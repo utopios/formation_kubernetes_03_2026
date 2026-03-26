@@ -1,0 +1,108 @@
+# =============================================================================
+# 03-pod-security-standards.yaml — Pod Security Standards (PSS)
+#
+# Kubernetes 1.25+ intègre les Pod Security Standards au niveau namespace.
+# 3 niveaux : privileged (rien) | baseline (minimal) | restricted (strict)
+# 3 modes   : enforce (bloque) | warn (avertit) | audit (log seulement)
+#
+# Ce fichier crée 3 namespaces avec des niveaux de sécurité différents
+# et montre quels pods sont acceptés/refusés.
+#
+# TEST :
+#   kubectl apply -f 03-pod-security-standards.yaml
+#   # Le pod privileged passe dans ns-privileged mais échoue dans ns-restricted
+#   # Le pod restricted passe dans tous les namespaces
+# =============================================================================
+
+# --- Namespace avec level=privileged (tout autorisé) ---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ns-privileged
+  labels:
+    # Mode enforce : bloque les pods non conformes
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/enforce-version: latest
+---
+# --- Namespace avec level=baseline (protections minimales) ---
+# Bloque : hostNetwork, hostPID, hostIPC, privileged, hostPath sensibles
+# Autorise : containers non-root, quelques capabilities
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ns-baseline
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: latest
+    # warn : affiche un warning sans bloquer (utile pour migration)
+    pod-security.kubernetes.io/warn: baseline
+    pod-security.kubernetes.io/warn-version: latest
+---
+# --- Namespace avec level=restricted (bonne pratique stricte) ---
+# Exige : non-root, readOnlyRootFilesystem, drop ALL, seccomp, etc.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ns-restricted
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+---
+# =============================================================================
+# Pod conforme au niveau "restricted" — passe dans tous les namespaces
+# =============================================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: restricted-compliant
+  namespace: ns-restricted
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: app
+      image: alpine:3.19
+      command: ["sleep", "3600"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
+  volumes:
+    - name: tmp
+      emptyDir: {}
+---
+# =============================================================================
+# Pod NON conforme — essayons de le déployer dans ns-restricted
+# kubectl apply → ERREUR : pods "non-compliant" is forbidden: violates PodSecurity
+# =============================================================================
+# COMMENTÉ VOLONTAIREMENT — décommentez pour démontrer le refus
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: non-compliant
+  namespace: ns-restricted   # ← Va être refusé !
+spec:
+  containers:
+    - name: app
+      image: alpine:3.19
+      command: ["sleep", "3600"]
+      # Pas de securityContext → viole "restricted"
