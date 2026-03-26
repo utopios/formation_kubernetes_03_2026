@@ -1,0 +1,12 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all
+  namespace: voting
+spec:
+  # Sélectionne TOUS les pods du namespace
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  # Pas de règles ingress/egress => tout est bloqué par défaut

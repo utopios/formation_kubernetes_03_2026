@@ -152,6 +152,7 @@ kubectl label namespace voting \
 
 ---
 
+## Ne Pas
 ## Partie 3 — Stratégies de déploiement
 
 ### Objectif

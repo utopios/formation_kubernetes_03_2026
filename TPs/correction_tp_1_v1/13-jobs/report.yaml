@@ -1,0 +1,110 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vote-report
+  namespace: voting
+spec:
+  completions: 3
+  parallelism: 2
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: report
+          image: postgres:15-alpine
+          command:
+            - sh
+            - -c
+            - |
+              psql -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB \
+                -c "SELECT vote, COUNT(id) as total FROM votes GROUP BY vote;" \
+              && echo "Rapport généré à $(date)"
+          env:
+            - name: POSTGRES_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: voting-config
+                  key: POSTGRES_HOST
+            - name: POSTGRES_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: voting-config
+                  key: POSTGRES_PORT
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: voting-config
+                  key: POSTGRES_DB
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: voting-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voting-secrets
+                  key: POSTGRES_PASSWORD
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voting-secrets
+                  key: POSTGRES_PASSWORD
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: vote-stats
+  namespace: voting
+spec:
+  schedule: "*/1 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: stats
+              image: postgres:15-alpine
+              command:
+                - sh
+                - -c
+                - |
+                  psql -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB \
+                    -c "SELECT vote, COUNT(id) as total FROM votes GROUP BY vote;" \
+                  && echo "Rapport généré à $(date)"
+              env:
+                - name: POSTGRES_HOST
+                  valueFrom:
+                    configMapKeyRef:
+                      name: voting-config
+                      key: POSTGRES_HOST
+                - name: POSTGRES_PORT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: voting-config
+                      key: POSTGRES_PORT
+                - name: POSTGRES_DB
+                  valueFrom:
+                    configMapKeyRef:
+                      name: voting-config
+                      key: POSTGRES_DB
+                - name: POSTGRES_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: voting-secrets
+                      key: POSTGRES_USER
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: voting-secrets
+                      key: POSTGRES_PASSWORD
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: voting-secrets
+                      key: POSTGRES_PASSWORD

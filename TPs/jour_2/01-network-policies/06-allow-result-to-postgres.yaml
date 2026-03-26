@@ -1,0 +1,45 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-result-to-postgres
+  namespace: voting
+spec:
+  podSelector:
+    matchLabels:
+      app: result
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: db
+      ports:
+        - port: 5432
+          protocol: TCP
+
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-postgres-from-result-and-worker
+  namespace: voting
+spec:
+  # Côté ENTRANT : redis accepte les connexions venant de vote
+  podSelector:
+    matchLabels:
+      app: db
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: result
+        - podSelector:
+            matchLabels:
+              app: worker
+      ports:
+        - port: 5432
+          protocol: TCP

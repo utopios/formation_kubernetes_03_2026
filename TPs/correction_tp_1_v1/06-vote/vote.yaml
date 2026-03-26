@@ -35,7 +35,7 @@ spec:
     spec:
       containers:
         - name: vote
-          image: mohamed1780/vote
+          image: mohamed1780/vote:v1
           ports:
             - containerPort: 5000
           env:

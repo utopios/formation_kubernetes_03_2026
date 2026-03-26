@@ -28,7 +28,7 @@ spec:
     spec:
       containers:
         - name: result
-          image: mohamed1780/result:v1
+          image: mohamed1780/result
           ports:
             - containerPort: 5000
           env:
