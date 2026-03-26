@@ -1,0 +1,128 @@
+# =============================================================================
+# reference-appproject.yaml — Tous les paramètres d'un AppProject ArgoCD
+#
+# Un AppProject = isolation multi-tenant dans ArgoCD
+#   - Quels repos Git sont autorisés ?
+#   - Quels clusters/namespaces sont autorisés comme destination ?
+#   - Quelles ressources K8s peuvent être déployées ?
+#   - Qui peut faire quoi ? (RBAC)
+#   - Quand peut-on déployer ? (syncWindows)
+#
+# Usage : kubectl apply -f reference-appproject.yaml
+# =============================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: mon-projet
+  namespace: argocd
+  # Sans ce finalizer, supprimer le projet supprime aussi toutes ses Applications
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  # Description libre du projet (affiché dans l'UI)
+  description: "Projet de démonstration pour la formation K8s"
+
+  # ---------------------------------------------------------------------------
+  # SOURCES — Repos Git autorisés pour ce projet
+  # Les Applications de ce projet ne peuvent pointer que vers ces repos
+  # ---------------------------------------------------------------------------
+  sourceRepos:
+    - "https://github.com/mon-org/*"       # Wildcard : tous les repos de l'org
+    - "https://github.com/argoproj/argocd-example-apps.git"  # Repo exact
+    # - "*"                                # Tout autoriser (déconseillé en prod)
+
+  # ---------------------------------------------------------------------------
+  # DESTINATIONS — Clusters et namespaces autorisés
+  # Les Applications de ce projet ne peuvent déployer que vers ces destinations
+  # ---------------------------------------------------------------------------
+  destinations:
+    - server: https://kubernetes.default.svc  # Cluster local
+      namespace: "argocd-demo"               # Namespace exact
+    - server: https://kubernetes.default.svc
+      namespace: "argocd-helm-demo"
+    - server: https://kubernetes.default.svc
+      namespace: "staging-*"                 # Wildcard : tous les namespaces staging-*
+    # - server: "*"                          # Tous les clusters
+    #   namespace: "*"                       # Tous les namespaces
+
+  # ---------------------------------------------------------------------------
+  # RESSOURCES CLUSTER-SCOPED (non-namespacées)
+  # Par défaut TOUT est interdit. Il faut explicitement autoriser.
+  # Exemples : Namespace, ClusterRole, ClusterRoleBinding, PersistentVolume
+  # ---------------------------------------------------------------------------
+  clusterResourceWhitelist:
+    - group: ""          # core API group
+      kind: Namespace    # Autoriser la création de namespaces
+    - group: "rbac.authorization.k8s.io"
+      kind: ClusterRole
+    - group: "rbac.authorization.k8s.io"
+      kind: ClusterRoleBinding
+    # - group: "*"       # Tout autoriser (déconseillé en prod)
+    #   kind: "*"
+
+  # ---------------------------------------------------------------------------
+  # RESSOURCES NAMESPACÉES — BLACKLIST
+  # Par défaut TOUT est autorisé. On peut interdire certaines ressources.
+  # ---------------------------------------------------------------------------
+  namespaceResourceBlacklist:
+    - group: ""
+      kind: ResourceQuota    # Interdire la création de ResourceQuota
+    # - group: "networking.k8s.io"
+    #   kind: NetworkPolicy
+
+  # ---------------------------------------------------------------------------
+  # ROLES — RBAC interne au projet
+  # Permet de donner des droits spécifiques à des utilisateurs ou groupes OIDC
+  # ---------------------------------------------------------------------------
+  roles:
+    - name: dev-readonly
+      description: "Lecture seule pour les développeurs"
+      # Format : p, <role>, <resource>, <action>, <appproject>/<app>, allow|deny
+      policies:
+        - p, proj:mon-projet:dev-readonly, applications, get, mon-projet/*, allow
+      # Groupes OIDC/SSO mappés à ce rôle
+      groups:
+        - "org:developers"
+
+    - name: ops-deployer
+      description: "Droits de sync pour les ops"
+      policies:
+        - p, proj:mon-projet:ops-deployer, applications, get,    mon-projet/*, allow
+        - p, proj:mon-projet:ops-deployer, applications, sync,   mon-projet/*, allow
+        - p, proj:mon-projet:ops-deployer, applications, update, mon-projet/*, allow
+      groups:
+        - "org:ops-team"
+
+  # ---------------------------------------------------------------------------
+  # ORPHANED RESOURCES — Alerte si des ressources dans les namespaces du projet
+  # ne sont gérées par aucune Application ArgoCD
+  # ---------------------------------------------------------------------------
+  orphanedResources:
+    warn: true    # Affiche un warning dans l'UI (pas d'erreur bloquante)
+    ignore:
+      - group: ""
+        kind: ConfigMap
+        name: kube-root-ca.crt   # ConfigMap injectée automatiquement par K8s
+
+  # ---------------------------------------------------------------------------
+  # SYNC WINDOWS — Fenêtres de déploiement
+  # Contrôle quand les Applications peuvent être synchronisées
+  # kind: "allow" = autorisé pendant la fenêtre
+  # kind: "deny"  = interdit pendant la fenêtre
+  # ---------------------------------------------------------------------------
+  syncWindows:
+    - kind: allow
+      schedule: "0 8 * * 1-5"   # Cron : lundi-vendredi à 8h
+      duration: "8h"             # Pendant 8 heures (8h → 16h)
+      applications:
+        - "*"                    # Toutes les applications du projet
+      namespaces:
+        - "argocd-demo"
+      manualSync: true           # Autoriser les sync manuels même hors fenêtre
+
+    - kind: deny
+      schedule: "0 0 * * 6-7"   # Week-end
+      duration: "48h"
+      applications:
+        - "*"
+      manualSync: false          # Interdire même les sync manuels

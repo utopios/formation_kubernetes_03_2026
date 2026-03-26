@@ -1,0 +1,186 @@
+# =============================================================================
+# reference-application.yaml — Tous les paramètres d'une Application ArgoCD
+#
+# Ce fichier est une référence commentée — ne pas appliquer tel quel.
+# Il documente tous les champs disponibles sur une Application ArgoCD.
+# =============================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mon-app
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  # Labels et annotations libres (filtrables dans l'UI)
+  labels:
+    env: staging
+    team: backend
+  annotations:
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: "alerts-channel"
+
+spec:
+  # Projet ArgoCD auquel appartient cette Application (RBAC + restrictions)
+  # Utiliser "default" si pas de projet custom
+  project: mon-projet
+
+  # Nombre de versions à conserver pour le rollback (défaut : 10)
+  revisionHistoryLimit: 5
+
+  # Informations libres affichées dans l'UI (liens utiles, contacts...)
+  info:
+    - name: "Documentation"
+      value: "https://wiki.mon-org.com/mon-app"
+    - name: "Contact"
+      value: "team-backend@mon-org.com"
+
+  # ---------------------------------------------------------------------------
+  # SOURCE — Où ArgoCD récupère les manifestes
+  # ---------------------------------------------------------------------------
+  source:
+    # URL du repo Git
+    repoURL: https://github.com/argoproj/argocd-example-apps.git
+
+    # Branche, tag ou commit SHA
+    targetRevision: HEAD
+    # targetRevision: main
+    # targetRevision: v1.2.3
+    # targetRevision: a1b2c3d4e5f6
+
+    # Chemin dans le repo contenant les manifestes (ou Chart.yaml pour Helm)
+    path: guestbook
+
+    # --- HELM (si Chart.yaml est présent dans path) ---
+    # helm:
+    #   releaseName: mon-app           # Nom de la release Helm
+    #   version: v3                    # Version de Helm (v2 ou v3)
+    #   values: |                      # Surcharge inline des values
+    #     replicaCount: 2
+    #     image:
+    #       tag: "1.0.0"
+    #   valueFiles:                    # Fichiers values supplémentaires dans le repo
+    #     - values-staging.yaml
+    #   parameters:                    # Surcharge paramètre par paramètre (--set)
+    #     - name: replicaCount
+    #       value: "2"
+    #   ignoreMissingValueFiles: true  # Ne pas échouer si valueFiles est absent
+    #   skipCrds: false                # Ne pas installer les CRDs du chart
+    #   passCredentials: false         # Ne pas transmettre les credentials aux sous-charts
+
+    # --- KUSTOMIZE (si kustomization.yaml est présent dans path) ---
+    # kustomize:
+    #   version: v4.5.2               # Version de kustomize
+    #   namePrefix: staging-          # Préfixe sur tous les noms de ressources
+    #   nameSuffix: -v2               # Suffixe sur tous les noms de ressources
+    #   namespace: mon-namespace      # Forcer un namespace sur toutes les ressources
+    #   images:                       # Surcharger les images
+    #     - name: gcr.io/heptio-images/ks-guestbook-demo
+    #       newTag: "0.3"
+    #   commonLabels:                 # Labels ajoutés à toutes les ressources
+    #     env: staging
+    #   commonAnnotations:
+    #     managed-by: argocd
+
+    # --- DIRECTORY (manifestes YAML/JSON bruts) ---
+    # directory:
+    #   recurse: true                 # Parcourir les sous-dossiers
+    #   jsonnet:                      # Options Jsonnet
+    #     extVars:
+    #       - name: env
+    #         value: staging
+    #   exclude: "*.test.yaml"        # Exclure certains fichiers
+    #   include: "*.yaml"             # N'inclure que certains fichiers
+
+  # ---------------------------------------------------------------------------
+  # DESTINATION — Où déployer
+  # ---------------------------------------------------------------------------
+  destination:
+    # Cluster cible — utiliser l'un ou l'autre (pas les deux)
+    server: https://kubernetes.default.svc   # URL de l'API server
+    # name: mon-cluster-distant              # Nom du cluster enregistré dans ArgoCD
+
+    # Namespace cible
+    namespace: argocd-demo
+
+  # ---------------------------------------------------------------------------
+  # SYNC POLICY — Comment et quand synchroniser
+  # ---------------------------------------------------------------------------
+  syncPolicy:
+
+    # Sync automatique (si absent : sync manuel uniquement)
+    automated:
+      prune: true        # Supprimer les ressources absentes de Git
+      selfHeal: true     # Re-synchroniser si le cluster diverge de Git
+      allowEmpty: false  # Refuser une sync si aucune ressource ne correspond
+
+    # Options de synchronisation (liste de "clé=valeur")
+    syncOptions:
+      # --- Création de namespace ---
+      - CreateNamespace=true          # Créer le namespace s'il n'existe pas
+                                      # !! Nécessite Namespace dans clusterResourceWhitelist du projet
+
+      # --- Stratégie d'apply ---
+      - ServerSideApply=true          # Utilise kubectl apply --server-side
+                                      # Recommandé pour Helm et les gros CRDs
+                                      # Résout l'erreur "annotation too long"
+      # - Replace=true                # Utilise kubectl replace au lieu de apply
+                                      # Utile pour les ressources qui refusent le patch
+
+      # --- Optimisation ---
+      - ApplyOutOfSyncOnly=true       # Ne synchronise QUE les ressources OutOfSync
+                                      # Réduit les appels API sur les gros clusters
+
+      # --- Pruning ---
+      - PruneLast=true                # Supprime les anciennes ressources APRÈS avoir
+                                      # déployé les nouvelles (évite les coupures)
+      # - PrunePropagationPolicy=background  # Politique de suppression K8s
+                                             # background (défaut) | foreground | orphan
+
+      # --- Validation ---
+      - Validate=false                # Désactive la validation kubectl
+                                      # Utile pour les CRDs avec RawExtension
+      - RespectIgnoreDifferences=true # Applique ignoreDifferences pendant la sync
+                                      # (par défaut, ignoreDifferences n'affecte que l'affichage)
+
+      # --- Sécurité ---
+      # - FailOnSharedResource=true   # Échoue si une ressource est gérée par
+                                      # une autre Application ArgoCD
+
+    # Métadonnées ajoutées au namespace AUTO-CRÉÉ (si CreateNamespace=true)
+    managedNamespaceMetadata:
+      labels:
+        istio-injection: enabled
+        pod-security.kubernetes.io/enforce: baseline
+      annotations:
+        description: "Créé automatiquement par ArgoCD"
+
+    # Politique de retry en cas d'échec de synchronisation
+    retry:
+      limit: 5            # Nombre de tentatives (-1 = infini)
+      backoff:
+        duration: 5s      # Délai initial entre deux tentatives
+        factor: 2         # Multiplicateur (backoff exponentiel)
+        maxDuration: 3m   # Délai maximum entre deux tentatives
+
+  # ---------------------------------------------------------------------------
+  # IGNORE DIFFERENCES — Ignorer certains champs lors de la comparaison Git/cluster
+  # Utile pour les champs mutés par des controllers (ex: Istio, cert-manager)
+  # ---------------------------------------------------------------------------
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas         # Ignorer les replicas (géré par HPA)
+    - group: ""
+      kind: ServiceAccount
+      jsonPointers:
+        - /secrets               # Ignorer les secrets injectés automatiquement
+    - group: "admissionregistration.k8s.io"
+      kind: MutatingWebhookConfiguration
+      jqPathExpressions:
+        - .webhooks[].clientConfig.caBundle   # Ignorer le CA injecté par cert-manager
+    - group: apps
+      kind: Deployment
+      name: mon-deployment       # Cibler une ressource spécifique par nom
+      namespace: argocd-demo
+      managedFieldsManagers:
+        - kube-controller-manager  # Ignorer les champs gérés par ce controller

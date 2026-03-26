@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: guestbook
+  namespace: argocd
+  # Ce finalizer fait en sorte que supprimer l'Application
+  # supprime aussi toutes les ressources K8s qu'elle gère
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  # Projet ArgoCD (isolation multi-tenant) — "default" pour la démo
+  project: default
+
+  source:
+    # Repo Git contenant les manifestes Kubernetes
+    # Ce repo est public et officiel — parfait pour la démo
+    repoURL: https://github.com/argoproj/argocd-example-apps.git
+    # Branche cible
+    targetRevision: HEAD
+    # Chemin dans le repo contenant les manifestes
+    # guestbook/ contient : guestbook-ui-deployment.yaml + guestbook-ui-svc.yaml
+    path: guestbook
+
+  destination:
+    # Cluster cible (kubernetes.default.svc = le cluster local)
+    server: https://kubernetes.default.svc
+    # Namespace de déploiement
+    namespace: argocd-demo
+
+  syncPolicy:
+    automated:
+      # Supprimer les ressources qui ne sont plus dans Git
+      prune: true
+      # Re-synchroniser si quelqu'un modifie le cluster manuellement (drift)
+      selfHeal: true
+      # Ne pas tout supprimer si le chemin Git est vide
+      allowEmpty: false
+    syncOptions:
+      # Créer le namespace s'il n'existe pas
+      - CreateNamespace=true
+      # Afficher les diffs dans les logs de sync
+      - ServerSideApply=false
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 1m
