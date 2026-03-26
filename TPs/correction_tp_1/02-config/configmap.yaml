@@ -8,6 +8,6 @@ data:
   OPTION_B: "Dogs"
   REDIS_HOST: "redis"
   REDIS_PORT: "6379"
-  POSTGRES_HOST: "db"
+  POSTGRES_HOST: "db-0"
   POSTGRES_PORT: "5432"
   POSTGRES_DB: "votes"
