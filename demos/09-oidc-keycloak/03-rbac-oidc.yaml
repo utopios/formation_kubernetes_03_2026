@@ -1,0 +1,57 @@
+# RBAC pour les utilisateurs OIDC
+# Les claims OIDC sont préfixés par "oidc:" (configuré dans le cluster)
+# alice@formation.local → username = oidc:alice@formation.local
+# groupe dev-team       → group    = oidc:dev-team
+
+# --- Role : lecture des workloads dans dev ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: oidc-dev-reader
+  namespace: dev
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "services", "configmaps", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+---
+# RoleBinding : alice (via OIDC) → dev-reader dans dev
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: oidc-alice-dev-reader
+  namespace: dev
+subjects:
+  - kind: User
+    name: "oidc:alice@formation.local"
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: oidc-dev-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+# ClusterRole custom : lecture des nodes et namespaces (non couverts par "view")
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: oidc-cluster-reader
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "namespaces", "persistentvolumes"]
+    verbs: ["get", "list", "watch"]
+---
+# ClusterRoleBinding : groupe dev-team (via OIDC) → cluster-reader
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: oidc-devteam-cluster-reader
+subjects:
+  - kind: Group
+    name: "oidc:dev-team"
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: oidc-cluster-reader
+  apiGroup: rbac.authorization.k8s.io

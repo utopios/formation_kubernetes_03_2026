@@ -1,0 +1,37 @@
+# Role : lecture seule des workloads dans le namespace dev
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dev-reader
+  namespace: dev
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "services", "endpoints", "configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+---
+# RoleBinding : alice → dev-reader dans dev
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: alice-dev-reader
+  namespace: dev
+subjects:
+  - kind: User
+    name: alice
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: dev-reader
+  apiGroup: rbac.authorization.k8s.io
+# Tester après apply :
+#   kubectl auth can-i get pods -n dev --as=alice       # yes
+#   kubectl auth can-i delete pods -n dev --as=alice    # no
+#   kubectl auth can-i get secrets -n dev --as=alice    # no
+#   kubectl --context=alice-ctx get pods -n dev         # OK
+#   kubectl --context=alice-ctx delete pod xxx -n dev   # Forbidden

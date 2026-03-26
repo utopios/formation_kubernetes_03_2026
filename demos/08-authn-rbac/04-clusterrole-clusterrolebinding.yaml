@@ -1,0 +1,33 @@
+# ClusterRole : lecture des nœuds et namespaces (ressources cluster-wide)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-observer
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "namespaces", "persistentvolumes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list"]
+---
+# ClusterRoleBinding : ServiceAccount mon-app → cluster-observer
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: mon-app-cluster-observer
+subjects:
+  - kind: ServiceAccount
+    name: mon-app
+    namespace: dev
+roleRef:
+  kind: ClusterRole
+  name: cluster-observer
+  apiGroup: rbac.authorization.k8s.io
+# Tester depuis le pod demo-serviceaccount :
+#   kubectl auth can-i get nodes --as=system:serviceaccount:dev:mon-app
+#   kubectl auth can-i list namespaces --as=system:serviceaccount:dev:mon-app
+#   kubectl auth can-i get pods --as=system:serviceaccount:dev:mon-app   # no (pas de RoleBinding)

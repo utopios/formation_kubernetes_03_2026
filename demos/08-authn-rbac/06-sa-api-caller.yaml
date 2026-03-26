@@ -1,0 +1,65 @@
+# ServiceAccount capable de lire les pods dans son propre namespace
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pod-reader-sa
+  namespace: dev
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader
+  namespace: dev
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-reader-binding
+  namespace: dev
+subjects:
+  - kind: ServiceAccount
+    name: pod-reader-sa
+    namespace: dev
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+# Pod qui appelle l'API Kubernetes avec son token SA
+apiVersion: v1
+kind: Pod
+metadata:
+  name: demo-api-caller
+  namespace: dev
+spec:
+  serviceAccountName: pod-reader-sa
+  containers:
+    - name: caller
+      image: alpine/k8s:1.27.16
+      command:
+        - sh
+        - -c
+        - |
+          TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+          CA=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          API="https://kubernetes.default.svc"
+
+          echo "=== Liste des pods dans dev (autorisé par pod-reader Role) ==="
+          kubectl --token="$TOKEN" --certificate-authority="$CA" --server="$API" \
+            get pods -n dev
+
+          echo ""
+          echo "=== Tentative lecture secrets (doit être Forbidden) ==="
+          kubectl --token="$TOKEN" --certificate-authority="$CA" --server="$API" \
+            get secrets -n dev 2>&1 || true
+
+          sleep 3600
+      resources:
+        requests: {cpu: "10m", memory: "16Mi"}
+        limits: {cpu: "100m", memory: "64Mi"}
+# Vérifier :
+#   kubectl logs demo-api-caller -n dev

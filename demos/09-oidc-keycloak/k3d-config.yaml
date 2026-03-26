@@ -1,0 +1,42 @@
+agents: 2
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: formation-oidc
+options:
+  k3s:
+    extraArgs:
+    - arg: --kube-apiserver-arg=oidc-issuer-url=https://172.24.0.3:30443/realms/k8s
+      nodeFilters:
+      - server:*
+    - arg: --kube-apiserver-arg=oidc-client-id=kubernetes
+      nodeFilters:
+      - server:*
+    - arg: --kube-apiserver-arg=oidc-username-claim=email
+      nodeFilters:
+      - server:*
+    - arg: --kube-apiserver-arg=oidc-groups-claim=groups
+      nodeFilters:
+      - server:*
+    - arg: '--kube-apiserver-arg=oidc-username-prefix=oidc:'
+      nodeFilters:
+      - server:*
+    - arg: '--kube-apiserver-arg=oidc-groups-prefix=oidc:'
+      nodeFilters:
+      - server:*
+    - arg: --kube-apiserver-arg=oidc-ca-file=/etc/ssl/certs/formation-ca.crt
+      nodeFilters:
+      - server:*
+ports:
+- nodeFilters:
+  - server:0
+  port: 30443:30443
+- nodeFilters:
+  - server:0
+  port: 31080:30080
+servers: 1
+volumes:
+- nodeFilters:
+  - server:*
+  - agent:*
+  volume: /Users/ihababadi/Downloads/k8s-formation 2/demos-jour1/09-oidc-keycloak/certs/ca.crt:/etc/ssl/certs/formation-ca.crt

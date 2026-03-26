@@ -1,0 +1,50 @@
+# Role éditeur : peut créer/modifier les workloads mais pas supprimer
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dev-editor
+  namespace: dev
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods/log", "pods/exec"]
+    verbs: ["get", "create"]
+---
+# RoleBinding : bob → dev-editor dans dev
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: bob-dev-editor
+  namespace: dev
+subjects:
+  - kind: User
+    name: bob
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: dev-editor
+  apiGroup: rbac.authorization.k8s.io
+---
+# Réutiliser le ClusterRole built-in "view" pour le groupe dev-team dans staging
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dev-team-view-staging
+  namespace: staging
+subjects:
+  - kind: Group
+    name: dev-team
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole    # ClusterRole limité au namespace staging via RoleBinding
+  name: view
+  apiGroup: rbac.authorization.k8s.io
+# Tester :
+#   kubectl auth can-i create deployments -n dev --as=bob     # yes
+#   kubectl auth can-i delete deployments -n dev --as=bob     # no
+#   kubectl auth can-i get pods -n staging --as=alice         # yes (via groupe dev-team)

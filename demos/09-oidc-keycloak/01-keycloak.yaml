@@ -1,0 +1,93 @@
+# Note : le secret TLS keycloak-tls est créé par 00-setup-k3d-oidc.sh
+# kubectl create secret tls keycloak-tls --cert=certs/keycloak.crt --key=certs/keycloak.key -n keycloak
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: keycloak
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:23.0
+          args:
+            - start-dev
+            - --https-certificate-file=/etc/tls/tls.crt
+            - --https-certificate-key-file=/etc/tls/tls.key
+          env:
+            - name: KEYCLOAK_ADMIN
+              value: "admin"
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              value: "admin123"
+            - name: KC_HTTPS_PORT
+              value: "8443"
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_HTTP_PORT
+              value: "8080"
+            - name: KC_HOSTNAME_STRICT
+              value: "false"
+            - name: KC_HOSTNAME_STRICT_HTTPS
+              value: "false"
+            - name: KC_PROXY
+              value: "passthrough"
+            - name: KC_HOSTNAME_URL
+              value: "https://172.24.0.4:30443"
+            - name: KC_HOSTNAME_ADMIN_URL
+              value: "https://172.24.0.4:30443"
+          ports:
+            - name: https
+              containerPort: 8443
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/tls
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /realms/master
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 15
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+      volumes:
+        - name: tls
+          secret:
+            secretName: keycloak-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: keycloak
+spec:
+  type: NodePort
+  selector:
+    app: keycloak
+  ports:
+    - name: https
+      port: 8443
+      targetPort: 8443
+      nodePort: 30443
+    - name: http
+      port: 8080
+      targetPort: 8080
+      nodePort: 30180
