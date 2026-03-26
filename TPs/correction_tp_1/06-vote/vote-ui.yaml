@@ -29,7 +29,7 @@ spec:
     spec:
       containers:
         - name: vote-ui
-          image: mohamed1780/vote-ui
+          image: mohamed1780/vote-ui:v1
           ports:
             - containerPort: 80
           env:
