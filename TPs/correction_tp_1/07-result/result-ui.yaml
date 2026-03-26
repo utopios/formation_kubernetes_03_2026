@@ -29,7 +29,7 @@ spec:
     spec:
       containers:
         - name: result-ui
-          image: mohamed1780/result-ui
+          image: mohamed1780/result-ui:v1
           ports:
             - containerPort: 80
           env:

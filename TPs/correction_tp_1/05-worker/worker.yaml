@@ -16,7 +16,7 @@ spec:
       
       containers:
         - name: worker
-          image: mohamed1780/worker
+          image: mohamed1780/worker:v1
           env:
             - name: REDIS_HOST
               valueFrom:
