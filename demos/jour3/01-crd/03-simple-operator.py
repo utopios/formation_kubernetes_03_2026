@@ -166,6 +166,19 @@ def delete_resources(apps_api, core_api, namespace: str, name: str):
                 log.warning(f"Erreur suppression : {e}")
 
 
+def reconcile_all(custom_api, apps_api, core_api):
+    """Re-reconcilie toutes les CRs existantes (pour mettre à jour le status après que les pods deviennent Ready)."""
+    try:
+        result = custom_api.list_cluster_custom_object(group=GROUP, version=VERSION, plural=PLURAL)
+        for ms in result.get("items", []):
+            try:
+                reconcile(custom_api, apps_api, core_api, ms)
+            except Exception as e:
+                log.error(f"Erreur reconcile (periodic): {e}")
+    except Exception as e:
+        log.error(f"Erreur list CRs: {e}")
+
+
 def main():
     log.info("=" * 60)
     log.info(" Microservice Operator démarré")
@@ -184,6 +197,9 @@ def main():
     apps_api   = client.AppsV1Api()
     core_api   = client.CoreV1Api()
 
+    RESYNC_INTERVAL = 10  # secondes — re-reconcilie toutes les CRs pour détecter les pods Ready
+    last_resync = 0
+
     w = watch.Watch()
     log.info("Watch démarré — en attente d'événements...")
 
@@ -193,6 +209,7 @@ def main():
         group=GROUP,
         version=VERSION,
         plural=PLURAL,
+        timeout_seconds=RESYNC_INTERVAL,  # expire le stream pour forcer un re-sync périodique
     ):
         event_type = event["type"]      # ADDED, MODIFIED, DELETED, ERROR
         ms_object  = event["object"]
@@ -209,6 +226,13 @@ def main():
             # Les ownerReferences font le nettoyage automatiquement
             # mais on le fait explicitement ici si l'ownerRef n'était pas posé
             log.info(f"CR {ns}/{name} supprimée — les ressources owned seront nettoyées automatiquement")
+
+        # Re-sync périodique pour mettre à jour le status quand les pods deviennent Ready
+        now = time.time()
+        if now - last_resync >= RESYNC_INTERVAL:
+            log.info("⟳ Re-sync périodique — vérification du status des pods...")
+            reconcile_all(custom_api, apps_api, core_api)
+            last_resync = now
 
         time.sleep(0.1)  # Rate limiting basique
 
