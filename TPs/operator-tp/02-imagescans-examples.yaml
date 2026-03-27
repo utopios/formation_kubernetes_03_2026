@@ -1,0 +1,32 @@
+---
+# Image récente et propre (alpine = légère, pas de Java DB)
+apiVersion: security.formation.local/v1
+kind: ImageScan
+metadata:
+  name: scan-nginx-stable
+  namespace: default
+spec:
+  image: nginx:1.27-alpine
+  severity: HIGH
+
+---
+# Image volontairement vulnérable (pour la démo)
+apiVersion: security.formation.local/v1
+kind: ImageScan
+metadata:
+  name: scan-old-alpine
+  namespace: default
+spec:
+  image: alpine:3.11
+  severity: CRITICAL
+
+---
+# Image node ancienne avec beaucoup de CVEs
+apiVersion: security.formation.local/v1
+kind: ImageScan
+metadata:
+  name: scan-node-old
+  namespace: default
+spec:
+  image: node:14-alpine
+  severity: LOW

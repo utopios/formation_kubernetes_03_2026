@@ -1,0 +1,96 @@
+---
+# Namespace dédié à l'opérateur
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: trivy-system
+
+---
+# ServiceAccount pour que l'opérateur puisse appeler l'API Kubernetes
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: trivy-operator
+  namespace: trivy-system
+
+---
+# ClusterRole : permissions nécessaires (générées par kubebuilder depuis les markers +rbac)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: trivy-operator-role
+rules:
+  # Lire/écrire nos ImageScan et leur status
+  - apiGroups: ["security.formation.local"]
+    resources: ["imagescans"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["security.formation.local"]
+    resources: ["imagescans/status"]
+    verbs: ["get", "update", "patch"]
+  # Créer des Jobs pour lancer Trivy
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Lire les logs des Pods pour récupérer les résultats
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: trivy-operator-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: trivy-operator-role
+subjects:
+  - kind: ServiceAccount
+    name: trivy-operator
+    namespace: trivy-system
+
+---
+# Déploiement de l'opérateur (une seule réplique suffit grâce au leader election)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trivy-operator
+  namespace: trivy-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trivy-operator
+  template:
+    metadata:
+      labels:
+        app: trivy-operator
+    spec:
+      serviceAccountName: trivy-operator
+      containers:
+        # Choisir UNE des deux images selon la version utilisée :
+        - name: operator
+          # Version Go (kubebuilder) :
+          image: formation/trivy-operator-go:latest
+          # Version Python (kopf) :
+          # image: formation/trivy-operator-python:latest
+          args:
+            - --leader-elect=false  # Mettre true en production multi-replicas
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
