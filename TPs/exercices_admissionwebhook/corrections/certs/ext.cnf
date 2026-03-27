@@ -1,2 +1,0 @@
-[v3_ext]
-subjectAltName = DNS:label-webhook.webhook-system.svc,DNS:label-webhook.webhook-system.svc.cluster.local
