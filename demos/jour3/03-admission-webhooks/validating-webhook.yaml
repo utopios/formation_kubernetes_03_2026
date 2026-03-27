@@ -1,0 +1,145 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+
+metadata:
+  name: pod-policy-webhook
+  # Nom global du groupe de webhooks.
+  # Un seul objet ValidatingWebhookConfiguration peut contenir plusieurs webhooks.
+
+webhooks:
+
+  - name: pod-policy.formation.local
+    # Identifiant logique du webhook — convention : <nom>.<groupe>.<tld>
+    # Apparaît dans les logs et messages d'erreur.
+    # Pas un DNS réel, juste un label unique pour distinguer les webhooks.
+
+    # ─────────────────────────────────────────────────────────────────
+    # PROTOCOLE
+    # ─────────────────────────────────────────────────────────────────
+
+    admissionReviewVersions: ["v1"]
+    # Versions du format AdmissionReview que le webhook comprend.
+    # L'API Server choisit la première version supportée des deux côtés.
+    # "v1" est stable depuis k8s 1.16. Mettre ["v1", "v1beta1"] pour compatibilité.
+
+    sideEffects: None
+    # Est-ce que le webhook a des effets de bord (écrit dans une DB, envoie un mail...) ?
+    #   None       → aucun effet de bord (le plus courant)
+    #   NoneOnDryRun → effets de bord sauf sur dry-run
+    #   Some       → a des effets de bord (le webhook ne sera pas appelé sur dry-run)
+    # Important pour que "kubectl apply --dry-run=server" fonctionne correctement.
+
+    # ─────────────────────────────────────────────────────────────────
+    # COMPORTEMENT EN CAS D'ERREUR
+    # ─────────────────────────────────────────────────────────────────
+
+    failurePolicy: Fail
+    # Que faire si le webhook est injoignable ou retourne une erreur 5xx ?
+    #   Fail   → bloque la requête (sécurité maximale, mais risque de bloquer le cluster)
+    #   Ignore → laisse passer (disponibilité maximale, mais perte de contrôle)
+    # En production : Fail. En formation/dev : Ignore pour ne pas bloquer le cluster.
+
+    timeoutSeconds: 10
+    # Temps max (en secondes) pour que le webhook réponde.
+    # Si dépassé, failurePolicy s'applique.
+    # Valeur max : 30s. Défaut : 10s.
+
+    # ─────────────────────────────────────────────────────────────────
+    # OÙ ENVOYER LA REQUÊTE
+    # ─────────────────────────────────────────────────────────────────
+
+    clientConfig:
+      # Option A — Service Kubernetes (recommandé en production)
+      service:
+        name: webhook-server          # Nom du Service
+        namespace: webhook-system     # Namespace du Service
+        path: "/validate-pods"        # Endpoint HTTP à appeler
+        port: 443                     # Port du Service (pas du container)
+
+      # Option B — URL directe (utile pour dev/debug ou clusters kind)
+      # url: "https://10.96.195.73/validate-pods"
+
+      caBundle: "LS0tLS1CRUdJTi..."
+      # Certificat CA (encodé base64) que l'API Server utilise pour vérifier
+      # le certificat TLS présenté par le webhook server.
+      # Sans ce champ, l'API Server refuse la connexion HTTPS.
+
+    # ─────────────────────────────────────────────────────────────────
+    # QUELLES RESSOURCES INTERCEPTER
+    # ─────────────────────────────────────────────────────────────────
+
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        # Opérations déclenchant l'appel au webhook :
+        #   CREATE  → création d'une ressource
+        #   UPDATE  → modification d'une ressource
+        #   DELETE  → suppression
+        #   CONNECT → connexions proxy (rare)
+        #   *       → toutes les opérations
+
+        apiGroups: [""]
+        # Groupe API des ressources à surveiller.
+        # ""        → groupe core (Pod, Service, ConfigMap...)
+        # "apps"    → Deployment, DaemonSet, StatefulSet...
+        # "batch"   → Job, CronJob...
+        # "*"       → tous les groupes
+
+        apiVersions: ["v1"]
+        # Version de l'API à surveiller.
+        # "v1", "v1beta1", "*" (toutes)
+
+        resources: ["pods"]
+        # Type de ressource à surveiller.
+        # "pods", "deployments", "services", "secrets"...
+        # "pods/exec" pour intercepter les kubectl exec
+
+        scope: "Namespaced"
+        # Portée des ressources :
+        #   Namespaced → ressources dans un namespace (pods, deployments...)
+        #   Cluster    → ressources globales (nodes, namespaces, PV...)
+        #   *          → les deux
+
+    # ─────────────────────────────────────────────────────────────────
+    # FILTRES — sur quels namespaces s'applique le webhook ?
+    # ─────────────────────────────────────────────────────────────────
+
+    namespaceSelector:
+      # Filtre basé sur les LABELS des namespaces.
+      # Si le namespace ne matche pas → le webhook n'est PAS appelé du tout.
+      # Plus efficace que objectSelector car évite des appels réseau inutiles.
+
+      matchLabels:
+        # Syntaxe exacte : le namespace DOIT avoir ce label
+        # environment: production
+
+      matchExpressions:
+        - key: skip-webhook-validation
+          operator: DoesNotExist
+          # N'appeler le webhook QUE sur les namespaces qui n'ont PAS ce label.
+          # Permet d'exempter le namespace du webhook lui-même.
+
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values:
+            - kube-system      # Jamais toucher aux pods système
+            - kube-public
+            - webhook-system   # Exempter le namespace du webhook lui-même
+          # Opérateurs disponibles : In, NotIn, Exists, DoesNotExist
+
+    objectSelector:
+      # Filtre basé sur les LABELS de la ressource elle-même (le pod, etc.)
+      # Appliqué APRÈS namespaceSelector.
+      # Exemple : ne valider que les pods avec le label "validated: true"
+      # matchLabels:
+      #   validated: "true"
+      {}
+      # {} = pas de filtre sur l'objet (tous les objets du namespace sont interceptés)
+
+    # ─────────────────────────────────────────────────────────────────
+    # OPTION SPÉCIFIQUE AUX MUTATING WEBHOOKS (pas utile ici)
+    # ─────────────────────────────────────────────────────────────────
+
+    # reinvocationPolicy: Never
+    # (MutatingWebhookConfiguration uniquement)
+    # Never    → appelé une seule fois
+    # IfNeeded → rappelé si un autre webhook a muté l'objet après lui

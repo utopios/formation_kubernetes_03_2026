@@ -222,3 +222,20 @@ def _parse_trivy_report(report: dict) -> dict:
             counts["total"] += 1
 
     return counts
+
+@kopf.on.event('batch', 'v1', 'jobs')
+def on_job_event(event,body, logger, **kwargs):
+    """Handler pour les événements sur les Jobs (optionnel, pour debug)."""
+    job = event['object']
+    job_status = body.get('status', {})
+    if not job_status.get('succeeded') and not job_status.get('failed'):
+        return  # Ignorer les événements sur les jobs en cours
+    job_name = job.metadata.name
+    namespace = job.metadata.namespace
+    scan_name = job_name.remove_prefix("trivy-scan-")
+    if job_status.get('succeeded'):
+        # Mettre à jour le status de l'ImageScan associé
+        logger.info(f"Job {job_name} terminé avec succès pour ImageScan {scan_name}")
+    elif job_status.get('failed'):
+        logger.error(f"Job {job_name} a échoué pour ImageScan {scan_name}")
+    logger.info(f"Événement Job: {job.metadata.name} - {event['type']}")
