@@ -1,0 +1,92 @@
+# =============================================================================
+# 03-test-pods.yaml — Pods pour tester le Validating Webhook
+#
+# 2 pods invalides (doivent être refusés) + 1 pod valide (doit passer)
+#
+# Usage :
+#   kubectl apply -f 03-test-pods.yaml        # Le pod valide passe, les invalides échouent
+#   kubectl apply -f 03-test-pods.yaml --dry-run=server   # Dry-run avec webhook
+# =============================================================================
+
+---
+# Namespace de test — DOIT avoir le webhook actif (pas de label skip-webhook-validation)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: webhook-test
+
+---
+# ── POD INVALIDE 1 : image avec :latest ─────────────────────────────────────
+# Attendu : "Pod rejeté : image 'nginx:latest' utilise ':latest'"
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-pod-latest-image
+  namespace: webhook-test
+spec:
+  containers:
+    - name: app
+      image: nginx:latest          # VIOLATION : tag :latest interdit
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+
+---
+# ── POD INVALIDE 2 : root user ───────────────────────────────────────────────
+# Attendu : "Pod rejeté : runAsUser=0 (root) interdit"
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-pod-root-user
+  namespace: webhook-test
+spec:
+  containers:
+    - name: app
+      image: nginx:1.25.3
+      securityContext:
+        runAsUser: 0               # VIOLATION : root interdit
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+
+---
+# ── POD INVALIDE 3 : pas de requests.cpu ─────────────────────────────────────
+# Attendu : "Pod rejeté : resources.requests.cpu manquant"
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-pod-no-cpu-request
+  namespace: webhook-test
+spec:
+  containers:
+    - name: app
+      image: nginx:1.25.3
+      # VIOLATION : pas de resources.requests.cpu
+
+---
+# ── POD VALIDE : respecte toutes les règles ──────────────────────────────────
+# Attendu : pod créé avec succès
+apiVersion: v1
+kind: Pod
+metadata:
+  name: good-pod
+  namespace: webhook-test
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  containers:
+    - name: app
+      image: nginx:1.25.3          # Tag précis ✓
+      securityContext:
+        runAsUser: 1000            # Non-root ✓
+        allowPrivilegeEscalation: false
+      resources:
+        requests:
+          cpu: 100m                # CPU request présent ✓
+          memory: 128Mi
+        limits:
+          cpu: 300m
+          memory: 256Mi
