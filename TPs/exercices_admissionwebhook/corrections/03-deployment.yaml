@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: label-webhook
+  namespace: webhook-system
+  labels:
+    app: label-webhook
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: label-webhook
+  template:
+    metadata:
+      labels:
+        app: label-webhook
+    spec:
+      containers:
+        - name: webhook
+          image: label-webhook:v1
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8443
+          volumeMounts:
+            - name: tls-certs
+              mountPath: /certs
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8443
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8443
+              scheme: HTTPS
+            initialDelaySeconds: 15
+            periodSeconds: 20
+      volumes:
+        - name: tls-certs
+          secret:
+            secretName: label-webhook-tls
