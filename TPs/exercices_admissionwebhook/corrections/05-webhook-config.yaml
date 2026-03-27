@@ -1,0 +1,27 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: label-webhook
+webhooks:
+  - name: label-webhook.webhook-system.svc
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    failurePolicy: Fail
+    namespaceSelector:
+      matchExpressions:
+        - key: webhook
+          operator: NotIn
+          values: ["false"]
+    rules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["pods"]
+        scope: "Namespaced"
+    clientConfig:
+      service:
+        name: label-webhook
+        namespace: webhook-system
+        path: /validate
+        port: 443
+      caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURSekNDQWkrZ0F3SUJBZ0lVUUU3QTJBZmF4bzhwdVlyT3J0S2RWTVVhb1NNd0RRWUpLb1pJaHZjTkFRRUwKQlFBd016RVpNQmNHQTFVRUF3d1FiR0ZpWld3dGQyVmlhRzl2YXkxallURVdNQlFHQTFVRUNnd05hemh6TFdadgpjbTFoZEdsdmJqQWVGdzB5TmpBek1qY3hOREV4TVRoYUZ3MHlOekF6TWpjeE5ERXhNVGhhTURNeEdUQVhCZ05WCkJBTU1FR3hoWW1Wc0xYZGxZbWh2YjJzdFkyRXhGakFVQmdOVkJBb01EV3M0Y3kxbWIzSnRZWFJwYjI0d2dnRWkKTUEwR0NTcUdTSWIzRFFFQkFRVUFBNElCRHdBd2dnRUtBb0lCQVFDWjVuQzJXcTV3NUUyRkpLY3NZbm12OHFsSgo2K2hoY2pUT0V4cEh3MTFYYm9uWGljYmtFc2lTNm5TMWc4THM5UG9RaHZ0b29NMVZKTmF4VVMwKzRYNUZ4RmwrCmxabjdZNitwbTM4TFdJMGRveGJOU1pZd24zUlJJV3YxR000a2dDVlZheSt3QXQzMFNLTnA2OTJFdW1ZSXBETzUKT2VSazRReDFCZ0JVdUw1bFBvRSsyZ1YwbTRyOUgrK2xXdkFtSmc2U0pKSGgvQ252SW4xdHFpVzBMVTVKWk1tZQpLci9xTWg3L3grK0tpa2U5UWRTNE5ocW5UMnZTQ0dYbjlWbFRRNFhQMitDTGlFTlRoS0M1RlhNZnU5TkF1T1k1CmJuaVh5L0JVMW5PeWRleDYrd1RPUUlRUzVrSEY2WmRVSFEvazJmWmRuK1NVTlZCL0xJUUZLQmlqdzh3ZEFnTUIKQUFHalV6QlJNQjBHQTFVZERnUVdCQlRxT2IwclRjNlNSczgyb0RiUWl0d1R0THhLTHpBZkJnTlZIU01FR0RBVwpnQlRxT2IwclRjNlNSczgyb0RiUWl0d1R0THhLTHpBUEJnTlZIUk1CQWY4RUJUQURBUUgvTUEwR0NTcUdTSWIzCkRRRUJDd1VBQTRJQkFRQ1NnQjJ0SkFzUUU0eU1XbWZYRWlxNlAvVXd1MmRXY080aUdnOXgzS2oveElCaFJwckYKaUprL21xRGJIMDVpUllkYzNySFU4dU9tUFMzQm92eFlhazJHYlFEUW1naTY4RUxKR1VHUFFrWEFZRHNUU0RJdworZEF3cy9CbzhGVlF5MHl3THV2OGMwWVFKemNtTDM4dVJBNE45QWYwTkRrc1RmSXV6YzlrUUFxR2RQalJqbDZzCnNtSGVxbERFUkdpQ2I2S3NTeHViVmlrdDFZcEhmV3NoNDhoRVJXUEg4clZJbnhEYTkxaUZqUDVJQkpYenB0c0YKREFZTTVSazM3OEx0YUtVTHVpV0U1M1puRzFmRGtaUHNlcVBNRlZYeWlPL3hRUUVSOWlYY1ZEZXNlNW1zaGxoeAp0bFNPdkpDYXhuNE4xZ291NmEwUThaa1JCVXlmMVVJMXV0ZG0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=
