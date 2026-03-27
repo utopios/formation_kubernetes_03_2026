@@ -1,0 +1,19 @@
+# Ce patch est appliqué PAR-DESSUS le deployment de la base
+# On ne redéfinit que ce qui change
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapi
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+        - name: myapi
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

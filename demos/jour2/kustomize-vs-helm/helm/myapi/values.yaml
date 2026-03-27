@@ -1,0 +1,24 @@
+# Valeurs par défaut — environnement dev
+replicaCount: 1
+
+image:
+  repository: registry.example.com/myapi
+  tag: latest
+
+service:
+  type: NodePort
+  port: 80
+
+# Pas de limites de ressources en dev
+resources: {}
+
+# Pas d'ingress en dev
+ingress:
+  enabled: false
+
+config:
+  APP_ENV: "development"
+  LOG_LEVEL: "debug"
+  DB_HOST: "postgres-dev"
+  DB_PORT: "5432"
+  DB_NAME: "myapi_dev"

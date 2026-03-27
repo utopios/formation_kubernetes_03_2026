@@ -1,0 +1,36 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - ingress.yaml          # Ressource supplémentaire en prod uniquement
+
+# Préfixe les noms avec "prod-"
+namePrefix: prod-
+
+# Labels d'environnement
+commonLabels:
+  env: prod
+
+# Namespace prod
+namespace: prod
+
+# Change l'image : tag fixe au lieu de "latest"
+images:
+  - name: registry.example.com/myapi
+    newTag: v1.2.0
+
+# Patch le deployment pour la prod (replicas + resources)
+patches:
+  - path: deployment-patch.yaml
+
+# Override les valeurs du ConfigMap
+configMapGenerator:
+  - name: myapi-config
+    behavior: replace
+    literals:
+      - APP_ENV=production
+      - LOG_LEVEL=warn
+      - DB_HOST=postgres-prod-cluster
+      - DB_PORT=5432
+      - DB_NAME=myapi_prod

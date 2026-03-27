@@ -1,0 +1,28 @@
+# Override pour la prod — ne contient que ce qui change
+replicaCount: 3
+
+image:
+  tag: v1.2.0
+
+service:
+  type: ClusterIP
+
+resources:
+  requests:
+    cpu: "250m"
+    memory: "256Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
+ingress:
+  enabled: true
+  host: api.example.com
+  tls: true
+
+config:
+  APP_ENV: "production"
+  LOG_LEVEL: "warn"
+  DB_HOST: "postgres-prod-cluster"
+  DB_PORT: "5432"
+  DB_NAME: "myapi_prod"
