@@ -1,0 +1,42 @@
+# =============================================================
+# APIService — C'est CE fichier qui fait toute la magie
+#
+# Il dit au kube-apiserver :
+#   "Pour le groupe weather.example.com/v1alpha1,
+#    forwarde les requêtes vers le service weather-apiserver
+#    dans le namespace weather-system"
+#
+# Après apply, kubectl connaît les ressources "weathers"
+# comme s'il s'agissait de pods ou de deployments natifs.
+# =============================================================
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1alpha1.weather.example.com
+spec:
+  # Le groupe et la version d'API gérés par notre serveur
+  group: weather.example.com
+  version: v1alpha1
+
+  # Où forwarder les requêtes
+  service:
+    name: weather-apiserver
+    namespace: weather-system
+    port: 443
+
+  # Priorité de ce groupe d'API
+  groupPriorityMinimum: 1000
+  versionPriority: 15
+
+  # En production, mettre le caBundle du certificat CA
+  # Pour le dev/test, on désactive la vérification TLS
+  insecureSkipTLSVerify: true
+
+  # -------------------------------------------------------
+  # Pour la production, remplacer insecureSkipTLSVerify par :
+  #
+  # caBundle: <BASE64_DU_CERTIFICAT_CA>
+  #
+  # Obtenir la valeur avec :
+  #   cat certs/tls.crt | base64 | tr -d '\n'
+  # -------------------------------------------------------

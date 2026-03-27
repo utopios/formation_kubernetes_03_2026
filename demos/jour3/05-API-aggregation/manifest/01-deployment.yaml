@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: weather-apiserver
+  namespace: weather-system
+  labels:
+    app: weather-apiserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: weather-apiserver
+  template:
+    metadata:
+      labels:
+        app: weather-apiserver
+    spec:
+      containers:
+        - name: weather-apiserver
+          image: weather-apiserver:v1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8443
+              protocol: TCP
+          volumeMounts:
+            - name: tls-certs
+              mountPath: /certs
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8443
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8443
+              scheme: HTTPS
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: tls-certs
+          secret:
+            secretName: weather-apiserver-tls

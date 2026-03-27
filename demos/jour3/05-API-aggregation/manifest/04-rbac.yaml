@@ -1,0 +1,59 @@
+# ServiceAccount pour le weather-apiserver
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: weather-apiserver
+  namespace: weather-system
+---
+# Le serveur doit pouvoir s'authentifier auprès du kube-apiserver
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: weather-apiserver:system:auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: weather-apiserver
+    namespace: weather-system
+---
+# Permettre la résolution d'authentification
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: weather-apiserver-auth-reader
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+  - kind: ServiceAccount
+    name: weather-apiserver
+    namespace: weather-system
+---
+# Permettre aux utilisateurs d'accéder aux ressources weather
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: weather-reader
+rules:
+  - apiGroups: ["weather.example.com"]
+    resources: ["weathers"]
+    verbs: ["get", "list", "watch"]
+---
+# Lier le ClusterRole à tous les utilisateurs authentifiés
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: weather-reader-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: weather-reader
+subjects:
+  - kind: Group
+    name: system:authenticated
+    apiGroup: rbac.authorization.k8s.io
