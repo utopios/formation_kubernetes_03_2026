@@ -1,0 +1,84 @@
+# =============================================================================
+# 02-custom-resources.yaml — Instances de la CRD Microservice
+#
+# Ces fichiers sont des Custom Resources (CR) — des instances de la CRD.
+# Comme un Pod est une instance de Deployment, un Microservice est une
+# instance de la CRD.
+#
+# Usage : kubectl apply -f 02-custom-resources.yaml
+#         kubectl get ms -A
+#         kubectl describe ms api-gateway -n demo-crd
+# =============================================================================
+
+---
+# Namespace de démonstration
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo-crd
+  labels:
+    demo: crd-jour3
+
+---
+# ── CR valide : api-gateway ────────────────────────────────────────────────
+# Toutes les valeurs respectent le schema OpenAPI v3 de la CRD.
+apiVersion: platform.formation.local/v1
+kind: Microservice
+metadata:
+  name: api-gateway
+  namespace: demo-crd
+  labels:
+    app: api-gateway
+    managed-by: manual   # En production : managed-by: ms-operator
+  annotations:
+    formation.note: "Point d'entrée de l'architecture microservices"
+spec:
+  image: "nginx:1.25"
+  replicas: 3
+  port: 8080
+  healthPath: "/healthz"
+  team: platform
+  expose: true
+  env:
+    LOG_LEVEL: "info"
+    UPSTREAM_URL: "http://user-service:8080"
+  resources:
+    cpu: "200m"
+    memory: "256Mi"
+
+---
+# ── CR valide : user-service ────────────────────────────────────────────────
+apiVersion: platform.formation.local/v1
+kind: Microservice
+metadata:
+  name: user-service
+  namespace: demo-crd
+spec:
+  image: "node:18-alpine"
+  replicas: 2
+  port: 3001
+  healthPath: "/health"
+  team: backend
+  env:
+    DB_HOST: "postgres.demo-crd.svc.cluster.local"
+    DB_PORT: "5432"
+    NODE_ENV: "production"
+  resources:
+    cpu: "500m"
+    memory: "512Mi"
+
+---
+# ── CR valide : payment-service ────────────────────────────────────────────
+apiVersion: platform.formation.local/v1
+kind: Microservice
+metadata:
+  name: payment-service
+  namespace: demo-crd
+spec:
+  image: "python:3.11-slim"
+  replicas: 1
+  port: 5000
+  team: backend
+  resources:
+    cpu: "300m"
+    memory: "384Mi"

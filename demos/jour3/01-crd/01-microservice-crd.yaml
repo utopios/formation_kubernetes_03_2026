@@ -1,0 +1,169 @@
+# =============================================================================
+# 01-microservice-crd.yaml — Custom Resource Definition complète
+#
+# Crée le type "Microservice" dans l'API Kubernetes.
+# Après application : kubectl get microservices (ou kubectl get ms)
+#
+# Concepts clés :
+#   - group  : domaine de l'API (comme apps, networking.k8s.io...)
+#   - scope  : Namespaced (par namespace) vs Cluster (global)
+#   - schema : validation OpenAPI v3 — le cluster rejette les CR invalides
+#   - additionalPrinterColumns : colonnes affichées par kubectl get ms
+#   - subresources.status : sépare spec (désiré) et status (observé)
+# =============================================================================
+
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  # Convention : <plural>.<group>
+  name: microservices.platform.formation.local
+spec:
+  # Groupe d'API — apparaît dans apiVersion: platform.formation.local/v1
+  group: platform.formation.local
+
+  # Namespaced = chaque namespace a ses propres instances (comme Deployment)
+  # Cluster    = ressource globale au cluster (comme Node, PersistentVolume)
+  scope: Namespaced
+
+  names:
+    plural: microservices      # kubectl get microservices
+    singular: microservice     # kubectl describe microservice xxx
+    kind: Microservice         # kind: Microservice dans les YAML
+    shortNames: ["ms"]         # kubectl get ms  (raccourci)
+    categories: ["all"]        # inclus dans kubectl get all
+
+  versions:
+    - name: v1
+      served: true             # Cette version répond aux requêtes API
+      storage: true            # Stockée dans etcd (une seule version storage)
+
+      # ── Colonnes affichées par kubectl get ms ────────────────────────────
+      additionalPrinterColumns:
+        - name: Image
+          type: string
+          jsonPath: .spec.image
+          description: Image Docker du microservice
+        - name: Replicas
+          type: integer
+          jsonPath: .spec.replicas
+        - name: Ready
+          type: integer
+          jsonPath: .status.readyReplicas
+          description: Nombre de replicas prêts
+        - name: Team
+          type: string
+          jsonPath: .spec.team
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+          description: Phase actuelle (Pending/Running/Failed)
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+
+      # ── Subresources ──────────────────────────────────────────────────────
+      subresources:
+        # Active /apis/platform.formation.local/v1/namespaces/*/microservices/*/status
+        # Permet de PATCH le status séparément de la spec
+        # L'opérateur met à jour .status, l'utilisateur met à jour .spec
+        status: {}
+
+        # Active kubectl scale ms mon-app --replicas=5
+        scale:
+          specReplicasPath: .spec.replicas
+          statusReplicasPath: .status.readyReplicas
+
+      # ── Validation OpenAPI v3 Schema ──────────────────────────────────────
+      # Le cluster valide chaque CR avant de l'accepter.
+      # Une CR invalide est rejetée avec un message explicite.
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: ["spec"]
+          properties:
+            spec:
+              type: object
+              required: ["image", "replicas", "team"]
+              description: "État désiré du microservice"
+              properties:
+                image:
+                  type: string
+                  description: "Image Docker (ex: nginx:1.25)"
+                  # Pattern : image[:tag] ou registry/image[:tag]
+                  minLength: 1
+
+                replicas:
+                  type: integer
+                  description: "Nombre de réplicas"
+                  minimum: 1
+                  maximum: 20
+                  default: 1
+
+                port:
+                  type: integer
+                  description: "Port d'écoute de l'application"
+                  minimum: 1
+                  maximum: 65535
+                  default: 8080
+
+                healthPath:
+                  type: string
+                  description: "Chemin du health check HTTP"
+                  default: "/healthz"
+
+                team:
+                  type: string
+                  description: "Équipe responsable"
+                  # Seules ces valeurs sont acceptées (enum)
+                  enum: ["platform", "backend", "frontend", "data", "security"]
+
+                env:
+                  type: object
+                  description: "Variables d'environnement (clé: valeur)"
+                  additionalProperties:
+                    type: string
+
+                resources:
+                  type: object
+                  description: "Ressources CPU et mémoire"
+                  properties:
+                    cpu:
+                      type: string
+                      description: "Limite CPU (ex: 500m, 1)"
+                    memory:
+                      type: string
+                      description: "Limite mémoire (ex: 512Mi, 1Gi)"
+
+                expose:
+                  type: boolean
+                  description: "Créer un Service NodePort ?"
+                  default: false
+
+            # Status — mis à jour par l'opérateur, pas l'utilisateur
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  description: "Pending | Running | Failed"
+                readyReplicas:
+                  type: integer
+                  description: "Nombre de pods prêts"
+                message:
+                  type: string
+                  description: "Message humain sur l'état actuel"
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string
