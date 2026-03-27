@@ -1,0 +1,214 @@
+# =============================================================================
+# 02-mutating-webhook-deployment.yaml
+#
+# Déploiement complet du Mutating Admission Webhook
+#
+# Ressources créées :
+#   1. Namespace webhook-mutating-system
+#   2. ServiceAccount + RBAC (lire les namespaces pour récupérer leurs labels)
+#   3. Secret TLS (placeholder — rempli par le script de setup)
+#   4. ConfigMap avec le code Python
+#   5. Deployment du serveur webhook
+#   6. Service exposant le webhook à l'API Server
+#   7. MutatingWebhookConfiguration
+#
+# DIFFÉRENCE avec ValidatingWebhookConfiguration :
+#   - kind: MutatingWebhookConfiguration  (pas Validating...)
+#   - La réponse contient un "patch" JSON Patch base64
+#   - Les mutating webhooks s'exécutent AVANT les validating webhooks
+#   - reinvocationPolicy: IfNeeded → re-invoqué si un autre webhook a muté l'objet
+# =============================================================================
+
+---
+# Namespace dédié — labellisé pour s'exempter de ses propres webhooks
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: webhook-mutating-system
+  labels:
+    skip-mutating-webhook: "true"
+
+---
+# ServiceAccount pour le pod webhook
+# En production, donner le minimum de droits nécessaires
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: webhook-server
+  namespace: webhook-mutating-system
+
+---
+# ClusterRole : lire les namespaces pour récupérer leurs labels
+# Nécessaire pour savoir si logging=enabled est présent
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: webhook-namespace-reader
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs:     ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: webhook-namespace-reader
+subjects:
+  - kind:      ServiceAccount
+    name:      webhook-server
+    namespace: webhook-mutating-system
+roleRef:
+  kind:     ClusterRole
+  name:     webhook-namespace-reader
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Secret TLS — placeholder remplacé par le script de setup
+apiVersion: v1
+kind: Secret
+metadata:
+  name: webhook-server-tls
+  namespace: webhook-mutating-system
+type: kubernetes.io/tls
+data:
+  tls.crt: ""
+  tls.key: ""
+
+---
+# Deployment du serveur webhook
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webhook-server
+  namespace: webhook-mutating-system
+  labels:
+    app: webhook-server
+spec:
+  replicas: 2   # 2 replicas pour la haute disponibilité
+  selector:
+    matchLabels:
+      app: webhook-server
+  template:
+    metadata:
+      labels:
+        app: webhook-server
+      annotations:
+        # Empêche ce pod d'être muté par lui-même
+        sidecar-inject: "false"
+    spec:
+      serviceAccountName: webhook-server
+      containers:
+        - name: webhook
+          image: python:3.11-slim
+          command: ["python3", "/app/webhook-server.py"]
+          args:
+            - "--cert=/tls/tls.crt"
+            - "--key=/tls/tls.key"
+            - "--port=8443"
+          ports:
+            - containerPort: 8443
+              name: https
+          volumeMounts:
+            - name: tls-certs
+              mountPath: /tls
+              readOnly: true
+            - name: webhook-code
+              mountPath: /app
+          resources:
+            requests:
+              cpu:    50m
+              memory: 64Mi
+            limits:
+              cpu:    200m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path:   /healthz
+              port:   8443
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path:   /healthz
+              port:   8443
+              scheme: HTTPS
+            initialDelaySeconds: 10
+            periodSeconds: 15
+      volumes:
+        - name: tls-certs
+          secret:
+            secretName: webhook-server-tls
+        - name: webhook-code
+          configMap:
+            name: webhook-code
+
+---
+# Service — l'API Server appelle ce service pour atteindre le webhook
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhook-server
+  namespace: webhook-mutating-system
+spec:
+  selector:
+    app: webhook-server
+  ports:
+    - port:       443       # Port côté API Server
+      targetPort: 8443      # Port côté container
+      name:       https
+
+---
+# MutatingWebhookConfiguration — enregistre le webhook dans l'API Server
+#
+# Différences clés avec ValidatingWebhookConfiguration :
+#   - kind: MutatingWebhookConfiguration
+#   - reinvocationPolicy: IfNeeded
+#     → Le webhook est rappelé si un autre webhook a modifié l'objet après lui
+#     → Important pour la cohérence quand plusieurs webhooks s'enchaînent
+#
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: sidecar-injector-webhook
+  annotations:
+    formation.note: "caBundle renseigné par le script 03-setup-mutating-webhook.sh"
+webhooks:
+  - name: sidecar-injector.formation.local
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    failurePolicy: Ignore   # En formation : ne pas bloquer le cluster
+    timeoutSeconds: 10
+    # reinvocationPolicy :
+    #   Never     → appelé une seule fois (défaut)
+    #   IfNeeded  → rappelé si un autre webhook a muté l'objet après lui
+    reinvocationPolicy: IfNeeded
+    clientConfig:
+      service:
+        name:      webhook-server
+        namespace: webhook-mutating-system
+        path:      "/mutate-pods"
+        port:      443
+      # caBundle injecté par le script de setup
+      caBundle: ""
+    rules:
+      - operations:   ["CREATE"]   # Seulement à la création (pas UPDATE)
+        apiGroups:    [""]
+        apiVersions:  ["v1"]
+        resources:    ["pods"]
+        scope:        "Namespaced"
+    # Le webhook ne s'applique qu'aux namespaces labellisés logging=enabled
+    # Cela évite d'appeler le webhook pour TOUS les pods du cluster
+    namespaceSelector:
+      matchLabels:
+        logging: enabled
+      matchExpressions:
+        - key: skip-mutating-webhook
+          operator: DoesNotExist
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values:
+            - kube-system
+            - kube-public
+            - webhook-mutating-system
